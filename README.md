@@ -4,7 +4,7 @@ An interactive model of the competitive mechanism described in Marx's *Capital*,
 
 **[Live demo →](https://sswamy2000.github.io/marx-simulator/marx-simulator-v2.html)**
 
-**[Technical documentation (PDF) →](https://sswamy2000.github.io/marx-simulator/marx-simulator-docs.pdf)**
+**[Technical documentation (PDF) →](https://sswamy2000.github.io/marx-simulator/Competitive Dynamics Simulator Guide - March 2026_sas.pdf)**
 
 ---
 
