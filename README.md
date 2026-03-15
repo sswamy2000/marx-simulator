@@ -4,7 +4,7 @@ An interactive model of the competitive mechanism described in Marx's *Capital*,
 
 **[Live demo →](https://sswamy2000.github.io/marx-simulator/marx-simulator-v2.html)**
 
-**[Technical documentation (PDF) →](https://sswamy2000.github.io/marx-simulator/Competitive Dynamics Simulator Guide - March 2026_sas.pdf)**
+**[Technical documentation (PDF) →](https://sswamy2000.github.io/marx-simulator/marx-simulator-docs.pdf)**
 
 ---
 
@@ -19,6 +19,24 @@ output = workers × hours/day × days/week × 52 × tech multiplier
 ```
 
 Each labor-hour produces one widget at a tech multiplier of 1. Both firms are price takers. Market share is proportional to each firm's actual output. A firm whose cost per widget exceeds the market price cannot cover costs and exits production.
+
+### Cost accounting — absorption costing with fixed overhead
+
+The model uses manufacturing absorption costing. Annual fixed cost (depreciation + variable capital) is fully incurred regardless of utilization or units sold. This reflects the reality of capital-intensive production: depreciation is a fixed overhead, not a variable cost that flexes with output.
+
+```
+C (purchase price)  = mult × v                ← what the firm paid; independent of lifespan
+Annual depreciation = C / lifespan            ← longer lifespan → lower annual charge
+Total annual cost   = depreciation + v        ← always fully incurred regardless of utilization
+Production cost / widget = total annual cost / output capacity  ← exit threshold; lower with longer lifespan
+Absorbed cost / widget sold = total annual cost / units sold    ← true per-unit burden
+Profit = revenue − total annual cost
+
+C avg (for rate of profit) = C × (lifespan / 2)   ← average capital tied up over asset life
+Rate of profit = s / (C avg + v)                   ← longer lifespan → more avg capital → lower RoP
+```
+
+The gap between production cost and absorbed cost is the underutilization penalty: when a firm sells less than it could produce, fixed overhead spreads over fewer units, raising the true cost per sold widget. A firm can be above the market exit threshold on production cost but still unprofitable on an absorbed basis.
 
 ---
 
@@ -36,13 +54,34 @@ Each labor-hour produces one widget at a tech multiplier of 1. Both firms are pr
 
 ## Key inputs
 
-- **Workers** — sets production scale; does not affect cost per widget
+- **Workers** — sets production scale; does not affect production cost per widget
 - **Hours per day** — physiological warnings above 10 hrs (amber) and 12 hrs (red)
 - **Days per week** — combined with hours/day determines weekly labor burden
-- **Tech multiplier** — the only input that lowers cost per widget; primary competitive variable
-- **Capital lifespan** — longer lifespan inflates C, suppressing rate of profit without affecting cost/unit
+- **Tech multiplier** — the only input that lowers production cost per widget; primary competitive variable
+- **Capital lifespan (yrs)** — longer lifespan lowers annual depreciation (lower production cost/unit, better margins) but raises average capital tied up, suppressing the rate of profit. Two opposing effects in one slider.
 - **Market price** — exogenous to both firms; drag it down to simulate competitive price destruction
-- **Market size** — fixed inelastic demand; combined output exceeding this triggers unsold widget costs
+- **Market size** — fixed inelastic demand; when combined output exceeds this, utilization falls and absorbed cost per unit rises
+
+---
+
+## Output metrics — per widget
+
+| Metric | What it means |
+|--------|---------------|
+| Production cost / widget | Total annual cost / output capacity — the exit threshold |
+| Absorbed cost / widget sold | Total annual cost / units sold — rises when utilization is below 100% |
+| Profit / widget | Absorbed basis — true per-unit profit after full fixed overhead |
+| Absorbed margin | Profit / market price — turns negative before exit threshold is hit |
+
+---
+
+## Charts — one operating year, monthly
+
+Three live-updating charts appear below the firm cards:
+
+- **Cumulative revenue vs. cumulative cost** — shows breakeven month for each firm. Fixed cost line is straight (it doesn't flex); revenue line slope depends on units sold.
+- **Cumulative profit** — running profit total month by month. Slope reflects monthly profit rate. Zero line shown as reference.
+- **Annual snapshot** — revenue, total annual cost, and profit as bars for each firm. Profit bar turns red when negative.
 
 ---
 
@@ -50,8 +89,10 @@ Each labor-hour produces one widget at a tech multiplier of 1. Both firms are pr
 
 - All inputs have both a slider and a direct number entry field, synchronized
 - Physiological labor warnings at 50+ and 60+ weekly hours
-- Market exit flag when cost/unit exceeds market price
-- Unsold widget cost tracking when total supply exceeds market size
+- Market exit flag when production cost/unit exceeds market price
+- Absorbed cost / widget sold rises with underutilization — makes fixed overhead penalty explicit
+- Breakeven month shown per firm on the card
+- Three live charts: cumulative revenue vs. cost, cumulative profit, annual snapshot
 - One-click Excel export via SheetJS — captures all inputs and outputs, fully formatted
 - Dark mode support
 
