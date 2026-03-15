@@ -104,6 +104,16 @@
     .export-btn { font-family: 'Courier New', monospace; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; padding: 10px 24px; background: var(--bg); color: var(--text-primary); border: 1px solid var(--border-md); border-radius: var(--radius-md); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
     .export-btn:hover { background: var(--bg-secondary); border-color: var(--text-secondary); }
     .export-btn:active { transform: scale(0.98); }
+    .charts-section { margin-top: 2rem; }
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 0.75rem; }
+    .chart-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
+    .chart-card.full-width { grid-column: 1 / -1; }
+    .chart-title { font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
+    .chart-subtitle { font-size: 12px; color: var(--text-secondary); margin-bottom: 1rem; }
+    .chart-legend { display: flex; gap: 20px; margin-bottom: 12px; flex-wrap: wrap; }
+    .chart-legend-item { display: flex; align-items: center; gap: 6px; font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-secondary); }
+    .legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+    @media (max-width: 640px) { .charts-grid { grid-template-columns: 1fr; } .chart-card.full-width { grid-column: 1; } }
   </style>
 </head>
 <body>
@@ -154,6 +164,47 @@
 <div class="firm-grid" id="output-cards"></div>
 <div class="equilibrium" id="eq-block"></div>
 
+<div class="charts-section">
+  <div class="section-label">Analysis charts — one operating year, monthly</div>
+  <div class="charts-grid">
+
+    <div class="chart-card full-width">
+      <div class="chart-title">Cumulative revenue vs. cumulative cost — 12 months</div>
+      <div class="chart-subtitle">Fixed annual cost (depreciation + v) spreads evenly across months. The month where revenue crosses cost is the breakeven point. Underutilization delays breakeven because fixed cost does not flex down.</div>
+      <div class="chart-legend">
+        <div class="chart-legend-item"><div class="legend-swatch" style="background:#1D9E75;"></div>Firm A revenue</div>
+        <div class="chart-legend-item"><div class="legend-swatch" style="background:#1D9E75; opacity:0.4;"></div>Firm A cost</div>
+        <div class="chart-legend-item"><div class="legend-swatch" style="background:#185FA5;"></div>Firm B revenue</div>
+        <div class="chart-legend-item"><div class="legend-swatch" style="background:#185FA5; opacity:0.4;"></div>Firm B cost</div>
+      </div>
+      <div style="position:relative;height:260px;"><canvas id="chart-cumrev"></canvas></div>
+    </div>
+
+    <div class="chart-card full-width">
+      <div class="chart-title">Cumulative profit — 12 months</div>
+      <div class="chart-subtitle">Running profit total month by month. A firm that never crosses zero is unprofitable for the year. Slope reflects the monthly profit rate — steeper is better.</div>
+      <div class="chart-legend">
+        <div class="chart-legend-item"><div class="legend-swatch" style="background:#1D9E75;"></div>Firm A</div>
+        <div class="chart-legend-item"><div class="legend-swatch" style="background:#185FA5;"></div>Firm B</div>
+        <div class="chart-legend-item"><div class="legend-swatch" style="background:#BA7517; width:20px; height:2px; border-radius:0;"></div>Zero (breakeven)</div>
+      </div>
+      <div style="position:relative;height:260px;"><canvas id="chart-cumprofit"></canvas></div>
+    </div>
+
+    <div class="chart-card full-width">
+      <div class="chart-title">Annual snapshot — revenue, cost, profit</div>
+      <div class="chart-subtitle">Full-year totals at current inputs. Fixed cost is fully incurred regardless of utilization rate.</div>
+      <div class="chart-legend">
+        <div class="chart-legend-item"><div class="legend-swatch" style="background:#378ADD;"></div>Revenue</div>
+        <div class="chart-legend-item"><div class="legend-swatch" style="background:#888780;"></div>Total annual cost</div>
+        <div class="chart-legend-item"><div class="legend-swatch" style="background:#639922;"></div>Profit</div>
+      </div>
+      <div style="position:relative;height:260px;"><canvas id="chart-waterfall"></canvas></div>
+    </div>
+
+  </div>
+</div>
+
 <div class="export-bar">
   <button class="export-btn" id="export-btn">&#8659; Export to Excel</button>
 </div>
@@ -163,7 +214,8 @@
   Built from Marx, Capital Vol. I (Ch. 10, 15) and Vol. III (Ch. 13–15).<br>
   Output = workers × hours/day × days/week × 52 × tech multiplier. Each labor-hour produces 1 widget at multiplier = 1.<br>
   Market share = firm output / total combined output (profitable firms only). Units sold = min(output, market size × share).<br>
-  C = mult × v × lifespan. Annual cost = (C/lifespan) + v. Rate of profit = s / (C + v) — Vol. III stock-based formulation.<br>
+  C (purchase) = mult × v. Annual depreciation = C / lifespan (longer lifespan → lower charge). C avg = C × (lifespan/2).<br>
+  Annual cost = depreciation + v. Rate of profit = s / (C̅ + v) where C̅ = avg capital tied up — Vol. III formulation.<br>
   Firms are price takers. Cost/unit > market price = market exit. Unsold widgets: cost incurred, no revenue.
 </footer>
 
@@ -186,13 +238,23 @@
     // each labor-hour produces mult widgets; total = workers × annual hours × mult
     const output                 = workers * annualHPW * mult;    // annual widget output
 
-    // Capital stock derived from labor base, tech, and lifespan
-    const C                      = mult * v * lifespan;           // total capital stock
-    const annualDepreciation     = C / lifespan;                  // = mult × v
-    const annualCost             = annualDepreciation + v;        // = (mult + 1) × v
-    const costPerUnit            = annualCost / output;           // = (mult+1)/(mult) = 1 + 1/mult
+    // Capital stock (purchase price): what the firm paid for its machinery.
+    // Scales with tech level and labor base — independent of lifespan.
+    // Lifespan drives two opposite effects:
+    //   1. Longer lifespan → lower annual depreciation → lower annual cost → better margins
+    //   2. Longer lifespan → more average capital tied up → lower rate of profit
+    // For rate of profit, we use average capital committed = C_purchase × (lifespan/2),
+    // representing the midpoint book value averaged across the asset's life.
+    // This preserves the Marxian insight: longer-lived capital suppresses the rate of
+    // profit even as it reduces the annual cost burden.
+    const C_purchase             = mult * v;                      // purchase price: tech × labor base
+    const annualDepreciation     = C_purchase / lifespan;         // longer lifespan → lower annual charge
+    const annualCost             = annualDepreciation + v;        // total annual cost, always incurred
+    const costPerUnit            = annualCost / output;           // (mult/lifespan + 1) / mult
+    const C                      = C_purchase * (lifespan / 2);   // avg capital tied up over asset life
+    const orgComp                = C / v;                         // = mult × lifespan/2
 
-    const orgComp                = C / v;                         // = mult × lifespan
+
     const laborShare             = v / annualCost;
 
     // Per-worker / per-day productivity
@@ -200,7 +262,7 @@
     const widgetsPerDay          = widgetsPerWorkerPerDay * workers;
     const widgetsPerWeek         = widgetsPerDay * dpw;
 
-    return { v, C, annualDepreciation, annualCost, output, costPerUnit, orgComp, laborShare, annualHPW, workDaysPerYear, widgetsPerWorkerPerDay, widgetsPerDay, widgetsPerWeek, lifespan, mult };
+    return { v, C, C_purchase, annualDepreciation, annualCost, output, costPerUnit, orgComp, laborShare, annualHPW, workDaysPerYear, widgetsPerWorkerPerDay, widgetsPerDay, widgetsPerWeek, lifespan, mult };
   }
 
   function allocate(a, b, aExited, bExited, marketSize) {
@@ -228,20 +290,22 @@
     // Cost is incurred on full output, not just what's sold
     const totalAnnualCost  = d.annualCost;                         // full annual cost regardless of sales
     const revenue          = mktPrice * unitsSold;
-    const totalCost        = d.costPerUnit * d.output;             // cost of all widgets produced
     const unsoldUnits      = Math.max(0, d.output - unitsSold);
-    const unsoldCost       = d.costPerUnit * unsoldUnits;          // cost incurred with no revenue return
-
     // Profit = revenue - total annual cost (including unsold)
     const profit           = revenue - totalAnnualCost;
     const surplusValue     = profit;
     const margin           = revenue > 0 ? profit / revenue : (profit >= 0 ? 1 : -Infinity);
     const rateOfProfit     = (d.C + d.v) > 0 ? surplusValue / (d.C + d.v) : 0;
-    const profitPerWidget  = unitsSold > 0 ? profit / unitsSold : 0;
-    const marginPerWidget  = mktPrice > 0 ? (mktPrice - d.costPerUnit) / mktPrice : 0;
+    // Absorbed cost per widget sold = total annual fixed+variable cost / units sold
+    // This is absorption costing: fixed overhead spreads over actual sold units only.
+    // When utilization < 100%, absorbed cost > production cost per unit — the underutilization penalty.
+    const absorbedCostPerUnit = unitsSold > 0 ? totalAnnualCost / unitsSold : Infinity;
+    const profitPerWidget     = unitsSold > 0 ? profit / unitsSold : 0;
+    const marginPerWidget     = mktPrice > 0 ? profitPerWidget / mktPrice : 0;
+    const absorbedMargin      = mktPrice > 0 ? (mktPrice - absorbedCostPerUnit) / mktPrice : 0;
     const utilization      = d.output > 0 ? unitsSold / d.output : 0;
 
-    return { revenue, totalAnnualCost, totalCost, unsoldUnits, unsoldCost, profit, surplusValue, margin, rateOfProfit, profitPerWidget, marginPerWidget, unitsSold, utilization };
+    return { revenue, totalAnnualCost, unsoldUnits, utilization, profit, surplusValue, margin, rateOfProfit, profitPerWidget, marginPerWidget, absorbedCostPerUnit, absorbedMargin, unitsSold, monthlyRevenue: revenue/12, monthlyCost: d.annualCost/12, monthlyProfit: (revenue - d.annualCost)/12, breakevenMonth: (revenue/12 > 0 && d.annualCost/12 > 0) ? Math.min(12, (d.annualCost/12)/(revenue/12)) : null };
   }
 
   function fmtI(n) {
@@ -327,7 +391,7 @@
         : '';
 
       const supplyBanner = !exited && supplyExceedsDemand
-        ? `<div class="info-banner">Total supply (${fmtI(totalOutput)}) exceeds market size (${fmtI(mktSize)}). This firm sells ${pct(f.utilization)} of what it produces. Unsold cost: ${fmtI(f.unsoldCost)} index units.</div>`
+        ? `<div class="info-banner">Total supply (${fmtI(totalOutput)}) exceeds market size (${fmtI(mktSize)}). This firm sells ${pct(f.utilization)} of what it produces. Fixed annual cost (${fmtI(f.totalAnnualCost)}) is fully incurred regardless.</div>`
         : '';
 
       const sc = stressClass(hpd, dpw);
@@ -353,12 +417,13 @@
 
         <div class="metric-section-head">capital composition</div>
         <div class="metric-row"><span class="metric-label">v — variable capital (labor)</span><span class="metric-val">${fmtI(d.v)}</span></div>
-        <div class="metric-row"><span class="metric-label">C — total capital stock</span><span class="metric-val">${fmtI(d.C)}</span></div>
+        <div class="metric-row"><span class="metric-label">C — capital purchase price</span><span class="metric-val">${fmtI(d.C_purchase)}</span></div>
+        <div class="metric-row"><span class="metric-label">C avg — avg capital tied up</span><span class="metric-val">${fmtI(d.C)}</span></div>
         <div class="metric-row"><span class="metric-label">capital lifespan</span><span class="metric-val">${d.lifespan} yrs</span></div>
         <div class="metric-row"><span class="metric-label">annual depreciation</span><span class="metric-val">${fmtI(d.annualDepreciation)}</span></div>
         <div class="metric-row"><span class="metric-label">annual cost (depr + v)</span><span class="metric-val">${fmtI(d.annualCost)}</span></div>
         <div class="metric-row"><span class="metric-label">tech multiplier</span><span class="metric-val">${d1(mult)}x</span></div>
-        <div class="metric-row"><span class="metric-label">organic composition (C/v)</span><span class="metric-val">${d.orgComp.toFixed(2)}</span></div>
+        <div class="metric-row"><span class="metric-label">organic composition (C̅/v)</span><span class="metric-val">${d.orgComp.toFixed(2)}</span></div>
         <div class="metric-row"><span class="metric-label">labor share of annual cost</span><span class="metric-val">${pct(d.laborShare)}</span></div>
 
         <div class="metric-section-head">production &amp; market</div>
@@ -368,18 +433,20 @@
         <div class="metric-row"><span class="metric-label">units sold</span><span class="metric-val purple">${fmtI(f.unitsSold)}</span></div>
         <div class="metric-row"><span class="metric-label">utilization rate</span><span class="metric-val ${uClass}">${pct(f.utilization)}</span></div>
         <div class="metric-row"><span class="metric-label">unsold widgets</span><span class="metric-val ${f.unsoldUnits > 0 ? 'warn' : ''}">${fmtI(f.unsoldUnits)}</span></div>
-        <div class="metric-row"><span class="metric-label">cost index / widget</span><span class="metric-val ${exited ? 'bad' : ''}">${d3(d.costPerUnit)}</span></div>
+        <div class="metric-row"><span class="metric-label">production cost / widget</span><span class="metric-val ${exited ? 'bad' : ''}">${d3(d.costPerUnit)}</span></div>
         <div class="metric-row"><span class="metric-label">market price / widget</span><span class="metric-val neutral">${d3(mktPrice)}</span></div>
 
         <div class="metric-section-head">per widget</div>
-        <div class="metric-row"><span class="metric-label">revenue / widget</span><span class="metric-val neutral">${d3(mktPrice)}</span></div>
-        <div class="metric-row"><span class="metric-label">profit / widget (sold)</span><span class="metric-val ${pClass}">${d3(f.profitPerWidget)}</span></div>
-        <div class="metric-row"><span class="metric-label">margin / widget</span><span class="metric-val ${f.marginPerWidget >= 0 ? 'good' : 'bad'}">${pct(f.marginPerWidget)}</span></div>
+        <div class="metric-row"><span class="metric-label">market price / widget</span><span class="metric-val neutral">${d3(mktPrice)}</span></div>
+        <div class="metric-row"><span class="metric-label">production cost / widget</span><span class="metric-val">${d3(d.costPerUnit)}</span></div>
+        <div class="metric-row"><span class="metric-label">absorbed cost / widget sold</span><span class="metric-val ${f.absorbedCostPerUnit <= mktPrice ? '' : 'bad'}">${exited ? 'N/A' : d3(f.absorbedCostPerUnit)}</span></div>
+        <div class="metric-row"><span class="metric-label">profit / widget (absorbed)</span><span class="metric-val ${pClass}">${exited ? 'N/A' : d3(f.profitPerWidget)}</span></div>
+        <div class="metric-row"><span class="metric-label">absorbed margin / widget</span><span class="metric-val ${f.absorbedMargin >= 0 ? 'good' : 'bad'}">${exited ? 'N/A' : pct(f.absorbedMargin)}</span></div>
 
         <div class="metric-section-head">annual</div>
         <div class="metric-row"><span class="metric-label">revenue (index)</span><span class="metric-val neutral">${fmtI(f.revenue)}</span></div>
         <div class="metric-row"><span class="metric-label">total annual cost (index)</span><span class="metric-val">${fmtI(f.totalAnnualCost)}</span></div>
-        <div class="metric-row"><span class="metric-label">unsold widget cost</span><span class="metric-val ${f.unsoldUnits > 0 ? 'warn' : ''}">${fmtI(f.unsoldCost)}</span></div>
+        <div class="metric-row"><span class="metric-label">breakeven month</span><span class="metric-val ${f.breakevenMonth ? (f.breakevenMonth <= 6 ? 'good' : f.breakevenMonth <= 10 ? 'warn' : 'bad') : 'bad'}">${f.breakevenMonth ? 'Month ' + Math.ceil(f.breakevenMonth) : 'Never'}</span></div>
         <div class="metric-row"><span class="metric-label">surplus value (s)</span><span class="metric-val ${pClass}">${fmtI(f.surplusValue)}</span></div>
         <div class="metric-row"><span class="metric-label">profit (index)</span><span class="metric-val ${pClass}">${fmtI(f.profit)}</span></div>
         <div class="metric-row"><span class="metric-label">profit margin</span><span class="metric-val ${mClass}">${pct(f.margin)}</span></div>
@@ -417,8 +484,134 @@
         market share = firm output / total supply &nbsp;|&nbsp; units sold = min(output, market size × share)<br>
         cost/unit = (C/lifespan + v) / output &nbsp;|&nbsp; profit = revenue − total annual cost &nbsp;|&nbsp; rate of profit = s / (C + v)
       </div>${narrative}`;
+
+    if (chartCumRev) updateCharts(a, b, aF, bF, mktPrice, aExited, bExited);
   }
 
+  // ── CHARTS ────────────────────────────────────────────────────────
+  let chartCumRev = null, chartCumProfit = null, chartWaterfall = null;
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function fmtAxis(v) {
+    const abs = Math.abs(v), sign = v < 0 ? '-' : '';
+    if (abs >= 1e6) return sign + (abs/1e6).toFixed(1) + 'M';
+    if (abs >= 1e3) return sign + (abs/1e3).toFixed(0) + 'k';
+    return sign + abs.toFixed(0);
+  }
+
+  const axisStyle = {
+    ticks: { font: { family: 'Courier New', size: 10 }, color: '#888', callback: fmtAxis },
+    grid: { color: 'rgba(128,128,128,0.12)' }
+  };
+  const xAxisStyle = {
+    ticks: { font: { family: 'Courier New', size: 10 }, color: '#888' },
+    grid: { color: 'rgba(128,128,128,0.08)' }
+  };
+  const tooltipFmt = ctx => {
+    const v = ctx.parsed.y;
+    return ' ' + ctx.dataset.label + ': ' + fmtAxis(v);
+  };
+
+  function initCharts() {
+    // ── Chart 1: Cumulative Revenue vs Cost ──
+    chartCumRev = new Chart(document.getElementById('chart-cumrev'), {
+      type: 'line',
+      data: {
+        labels: MONTHS,
+        datasets: [
+          { label: 'Firm A revenue', data: [], borderColor: '#1D9E75', backgroundColor: 'rgba(29,158,117,0.08)', borderWidth: 2.5, pointRadius: 3, fill: false, tension: 0 },
+          { label: 'Firm A cost',    data: [], borderColor: '#1D9E75', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [5,3], pointRadius: 0, fill: false, tension: 0 },
+          { label: 'Firm B revenue', data: [], borderColor: '#185FA5', backgroundColor: 'rgba(24,95,165,0.08)', borderWidth: 2.5, pointRadius: 3, fill: false, tension: 0 },
+          { label: 'Firm B cost',    data: [], borderColor: '#185FA5', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [5,3], pointRadius: 0, fill: false, tension: 0 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, callbacks: { label: tooltipFmt } } },
+        scales: { x: xAxisStyle, y: axisStyle }
+      }
+    });
+
+    // ── Chart 2: Cumulative Profit ──
+    chartCumProfit = new Chart(document.getElementById('chart-cumprofit'), {
+      type: 'line',
+      data: {
+        labels: MONTHS,
+        datasets: [
+          { label: 'Firm A', data: [], borderColor: '#1D9E75', backgroundColor: 'rgba(29,158,117,0.08)', borderWidth: 2.5, pointRadius: 3, fill: true, tension: 0 },
+          { label: 'Firm B', data: [], borderColor: '#185FA5', backgroundColor: 'rgba(24,95,165,0.08)', borderWidth: 2.5, pointRadius: 3, fill: true, tension: 0 },
+          { label: 'Breakeven (zero)', data: Array(12).fill(0), borderColor: '#BA7517', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4,3], pointRadius: 0, fill: false }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, callbacks: { label: tooltipFmt } } },
+        scales: { x: xAxisStyle, y: axisStyle }
+      }
+    });
+
+    // ── Chart 3: Annual Snapshot Waterfall ──
+    chartWaterfall = new Chart(document.getElementById('chart-waterfall'), {
+      type: 'bar',
+      data: {
+        labels: ['Firm A\nRevenue', 'Firm A\nCost', 'Firm A\nProfit', 'Firm B\nRevenue', 'Firm B\nCost', 'Firm B\nProfit'],
+        datasets: [{ data: [], backgroundColor: [], borderRadius: 3, borderSkipped: false }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + fmtAxis(ctx.parsed.y) } } },
+        scales: {
+          x: { ticks: { font: { family: 'Courier New', size: 10 }, color: '#888' }, grid: { color: 'rgba(128,128,128,0.08)' } },
+          y: axisStyle
+        }
+      }
+    });
+  }
+
+  function updateCharts(a, b, aF, bF, mktPrice, aExited, bExited) {
+    // ── Monthly cumulative arrays (12 months, even distribution) ──
+    const aCumRev    = [], aCumCost = [], aCumProfit = [];
+    const bCumRev    = [], bCumCost = [], bCumProfit = [];
+
+    for (let m = 1; m <= 12; m++) {
+      aCumRev.push(aExited ? 0 : aF.monthlyRevenue * m);
+      aCumCost.push(aExited ? 0 : aF.monthlyCost * m);
+      aCumProfit.push(aExited ? 0 : aF.monthlyProfit * m);
+      bCumRev.push(bExited ? 0 : bF.monthlyRevenue * m);
+      bCumCost.push(bExited ? 0 : bF.monthlyCost * m);
+      bCumProfit.push(bExited ? 0 : bF.monthlyProfit * m);
+    }
+
+    // Chart 1
+    chartCumRev.data.datasets[0].data = aCumRev;
+    chartCumRev.data.datasets[1].data = aCumCost;
+    chartCumRev.data.datasets[2].data = bCumRev;
+    chartCumRev.data.datasets[3].data = bCumCost;
+    chartCumRev.update('none');
+
+    // Chart 2
+    chartCumProfit.data.datasets[0].data = aCumProfit;
+    chartCumProfit.data.datasets[1].data = bCumProfit;
+    chartCumProfit.data.datasets[2].data = Array(12).fill(0);
+    chartCumProfit.update('none');
+
+    // Chart 3 — annual snapshot
+    const aRev  = aExited ? 0 : aF.revenue;
+    const aCost = aExited ? 0 : aF.totalAnnualCost;
+    const aPro  = aExited ? 0 : aF.profit;
+    const bRev  = bExited ? 0 : bF.revenue;
+    const bCost = bExited ? 0 : bF.totalAnnualCost;
+    const bPro  = bExited ? 0 : bF.profit;
+
+    chartWaterfall.data.datasets[0].data = [aRev, aCost, aPro, bRev, bCost, bPro];
+    chartWaterfall.data.datasets[0].backgroundColor = [
+      '#378ADD', '#888780', aPro >= 0 ? '#639922' : '#D85A30',
+      '#378ADD', '#888780', bPro >= 0 ? '#639922' : '#D85A30'
+    ];
+    chartWaterfall.update('none');
+  }
+
+  // Call render once on load — charts initialized via Chart.js onload callback
   render();
 
   // ── EXPORT ────────────────────────────────────────────────────────
@@ -475,7 +668,8 @@
       // ── CAPITAL COMPOSITION ──
       ['CAPITAL COMPOSITION', '', ''],
       ['v — variable capital (labor index)', r(a.v, 0), r(b.v, 0)],
-      ['C — total capital stock', r(a.C, 0), r(b.C, 0)],
+      ['C — capital purchase price', r(a.C_purchase, 0), r(b.C_purchase, 0)],
+      ['C avg — avg capital tied up (for RoP)', r(a.C, 0), r(b.C, 0)],
       ['Annual depreciation', r(a.annualDepreciation, 0), r(b.annualDepreciation, 0)],
       ['Annual cost (depreciation + v)', r(a.annualCost, 0), r(b.annualCost, 0)],
       ['Tech multiplier', r(aM, 1), r(bM, 1)],
@@ -498,16 +692,18 @@
 
       // ── PER WIDGET ──
       ['PER WIDGET', '', ''],
-      ['Revenue / widget', r(mktPrice, 4), r(mktPrice, 4)],
-      ['Profit / widget (sold)', r(aF.profitPerWidget, 4), r(bF.profitPerWidget, 4)],
-      ['Margin / widget', r(aF.marginPerWidget, 4), r(bF.marginPerWidget, 4)],
+      ['Market price / widget', r(mktPrice, 4), r(mktPrice, 4)],
+      ['Production cost / widget (full utilization)', r(a.costPerUnit, 4), r(b.costPerUnit, 4)],
+      ['Absorbed cost / widget sold', r(aF.absorbedCostPerUnit, 4), r(bF.absorbedCostPerUnit, 4)],
+      ['Profit / widget (absorbed)', r(aF.profitPerWidget, 4), r(bF.profitPerWidget, 4)],
+      ['Absorbed margin / widget', r(aF.absorbedMargin, 4), r(bF.absorbedMargin, 4)],
       ['', '', ''],
 
       // ── ANNUAL ──
       ['ANNUAL', '', ''],
       ['Revenue (index)', r(aF.revenue, 2), r(bF.revenue, 2)],
       ['Total annual cost (index)', r(aF.totalAnnualCost, 2), r(bF.totalAnnualCost, 2)],
-      ['Unsold widget cost (index)', r(aF.unsoldCost, 2), r(bF.unsoldCost, 2)],
+      ['Breakeven month', aF.breakevenMonth ? 'Month ' + Math.ceil(aF.breakevenMonth) : 'Never', bF.breakevenMonth ? 'Month ' + Math.ceil(bF.breakevenMonth) : 'Never'],
       ['Surplus value s (index)', r(aF.surplusValue, 2), r(bF.surplusValue, 2)],
       ['Profit (index)', r(aF.profit, 2), r(bF.profit, 2)],
       ['Profit margin', r(aF.margin, 4), r(bF.margin, 4)],
@@ -560,6 +756,7 @@
   }
 
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js" onload="initCharts(); render();"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </body>
 </html>
