@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Marxian Competitive Dynamics Simulator v2</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #ffffff; --bg-secondary: #f5f4f1;
+      --text-primary: #1a1a1a; --text-secondary: #5a5a5a; --text-tertiary: #9a9a9a;
+      --border: rgba(0,0,0,0.12); --border-md: rgba(0,0,0,0.25);
+      --green: #0F6E56; --green-bg: #E1F5EE;
+      --red: #993C1D; --red-bg: #FAECE7;
+      --amber: #854F0B; --amber-bg: #FAEEDA;
+      --blue: #185FA5; --blue-bg: #E6F1FB;
+      --purple: #534AB7; --purple-bg: #EEEDFE;
+      --radius-md: 8px; --radius-lg: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1a18; --bg-secondary: #242420;
+        --text-primary: #e8e0d0; --text-secondary: #9a9080; --text-tertiary: #5a5040;
+        --border: rgba(255,255,255,0.1); --border-md: rgba(255,255,255,0.2);
+        --green: #5DCAA5; --green-bg: #085041;
+        --red: #F0997B; --red-bg: #4A1B0C;
+        --amber: #EF9F27; --amber-bg: #412402;
+        --blue: #85B7EB; --blue-bg: #0C447C;
+        --purple: #AFA9EC; --purple-bg: #26215C;
+      }
+    }
+    body { font-family: 'Georgia', serif; background: var(--bg); color: var(--text-primary); max-width: 960px; margin: 0 auto; padding: 48px 24px 80px; line-height: 1.6; }
+    header { margin-bottom: 40px; border-bottom: 0.5px solid var(--border); padding-bottom: 24px; }
+    header .eyebrow { font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 3px; color: var(--text-tertiary); text-transform: uppercase; margin-bottom: 8px; }
+    header h1 { font-size: 26px; font-weight: 400; margin-bottom: 4px; }
+    header .version { font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-tertiary); margin-bottom: 10px; }
+    header p { font-size: 13px; color: var(--text-secondary); }
+
+    .section-label { font-family: 'Courier New', monospace; font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 2px; margin: 1.5rem 0 0.6rem; }
+
+    .market-bar { background: var(--bg-secondary); border-radius: var(--radius-lg); padding: 0.9rem 1.25rem; margin-bottom: 0.6rem; display: grid; grid-template-columns: 200px 1fr 90px auto; align-items: center; gap: 12px; }
+    .market-bar-label { font-family: 'Courier New', monospace; font-size: 12px; color: var(--text-secondary); }
+    .market-bar input[type=range] { width: 100%; accent-color: var(--blue); }
+    .market-bar input[type=number] { width: 90px; font-size: 13px; font-family: 'Courier New', monospace; font-weight: 600; padding: 4px 8px; text-align: right; border-radius: var(--radius-md); border: 0.5px solid var(--border-md); background: var(--blue-bg); color: var(--blue); -moz-appearance: textfield; }
+    .market-bar input[type=number]::-webkit-inner-spin-button, .market-bar input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .market-bar .hint { font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
+    .market-bar.size-bar input[type=number] { background: var(--purple-bg); color: var(--purple); }
+    .market-bar.size-bar input[type=range] { accent-color: var(--purple); }
+
+    @media (max-width: 640px) {
+      .market-bar { grid-template-columns: 1fr 80px; }
+      .market-bar input[type=range] { grid-column: 1 / -1; }
+      .market-bar .hint { display: none; }
+      .controls-grid, .firm-grid { grid-template-columns: 1fr !important; }
+    }
+
+    .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; }
+    .input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; }
+    .input-row label { font-size: 12px; color: var(--text-secondary); min-width: 140px; font-family: 'Courier New', monospace; }
+    .input-row input[type=range] { flex: 1; accent-color: var(--text-primary); min-width: 0; }
+    .input-row input[type=number] { width: 68px; font-size: 12px; font-family: 'Courier New', monospace; font-weight: 600; color: var(--text-primary); background: var(--bg-secondary); border: 0.5px solid var(--border-md); border-radius: var(--radius-md); padding: 3px 6px; text-align: right; -moz-appearance: textfield; }
+    .input-row input[type=number]::-webkit-inner-spin-button, .input-row input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .input-row input[type=number]:focus { outline: none; border-color: var(--text-secondary); }
+
+    .labor-warning { font-family: 'Courier New', monospace; font-size: 11px; padding: 4px 10px; border-radius: var(--radius-md); margin-bottom: 8px; display: none; }
+    .labor-warning.show { display: block; }
+    .labor-warning.severe   { background: var(--red-bg);   color: var(--red); }
+    .labor-warning.elevated { background: var(--amber-bg); color: var(--amber); }
+
+    hr.divider { border: none; border-top: 0.5px solid var(--border); margin: 1.5rem 0; }
+
+    .firm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 1rem; }
+    .firm-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; }
+    .firm-card.winner { border: 2px solid var(--green); }
+    .firm-card.exited { border: 2px solid var(--red); opacity: 0.72; }
+    .firm-card.tied   { border: 2px solid var(--blue); }
+
+    .firm-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text-primary); font-family: 'Courier New', monospace; }
+    .metric-section-head { font-family: 'Courier New', monospace; font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 1.5px; padding: 8px 0 3px; }
+    .metric-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 0.5px solid var(--border); }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-label { color: var(--text-secondary); font-family: 'Courier New', monospace; }
+    .metric-val { font-weight: 600; font-family: 'Courier New', monospace; color: var(--text-primary); }
+    .metric-val.good    { color: var(--green); }
+    .metric-val.bad     { color: var(--red); }
+    .metric-val.warn    { color: var(--amber); }
+    .metric-val.neutral { color: var(--blue); }
+    .metric-val.purple  { color: var(--purple); }
+
+    .badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: var(--radius-md); margin-left: 6px; font-family: 'Courier New', monospace; }
+    .badge-win  { background: var(--green-bg);  color: var(--green); }
+    .badge-lose { background: var(--amber-bg);  color: var(--amber); }
+    .badge-exit { background: var(--red-bg);    color: var(--red); }
+    .badge-tied { background: var(--blue-bg);   color: var(--blue); }
+
+    .exit-banner { background: var(--red-bg); color: var(--red); font-family: 'Courier New', monospace; font-size: 11px; padding: 7px 10px; border-radius: var(--radius-md); margin-bottom: 10px; line-height: 1.5; }
+    .info-banner { background: var(--blue-bg); color: var(--blue); font-family: 'Courier New', monospace; font-size: 11px; padding: 7px 10px; border-radius: var(--radius-md); margin-bottom: 10px; line-height: 1.5; }
+
+    .equilibrium { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 1.25rem; margin-top: 1.25rem; font-size: 13px; line-height: 1.8; color: var(--text-secondary); }
+    .eq-formula { font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px; font-family: 'Courier New', monospace; line-height: 1.7; }
+
+    footer { margin-top: 60px; padding-top: 20px; border-top: 0.5px solid var(--border); font-size: 11px; color: var(--text-tertiary); font-family: 'Courier New', monospace; line-height: 1.8; }
+    .export-bar { display: flex; justify-content: flex-end; margin-top: 1.5rem; }
+    .export-btn { font-family: 'Courier New', monospace; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; padding: 10px 24px; background: var(--bg); color: var(--text-primary); border: 1px solid var(--border-md); border-radius: var(--radius-md); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+    .export-btn:hover { background: var(--bg-secondary); border-color: var(--text-secondary); }
+    .export-btn:active { transform: scale(0.98); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Karl Marx — Capital, Vol. I &amp; III</div>
+  <h1>Competitive Dynamics Simulator</h1>
+  <div class="version">v2.0</div>
+  <p>Each firm produces widgets as a direct function of workers, hours per day, days per week, and the tech multiplier. Firms are price takers. Market share is proportional to each firm's actual output. A firm whose cost per widget exceeds the market price cannot cover costs and exits production.</p>
+</header>
+
+<div class="section-label">Market</div>
+<div class="market-bar">
+  <span class="market-bar-label">Market price / widget</span>
+  <input type="range" min="0.5" max="20" value="6" step="0.1" id="mkt-r">
+  <input type="number" min="0.5" max="20" value="6" step="0.1" id="mkt-n">
+  <span class="hint">cost index units — exogenous to both firms</span>
+</div>
+<div class="market-bar size-bar">
+  <span class="market-bar-label">Market size (widgets / yr)</span>
+  <input type="range" min="1000" max="10000000" value="500000" step="1000" id="mktsize-r">
+  <input type="number" min="1000" max="10000000" value="500000" step="1000" id="mktsize-n">
+  <span class="hint">total demand, inelastic</span>
+</div>
+
+<div class="controls-grid">
+  <div>
+    <div class="section-label">Firm A</div>
+    <div class="input-row"><label>Workers</label><input type="range" min="1" max="500" value="100" step="1" id="a-workers-r"><input type="number" min="1" max="500" value="100" step="1" id="a-workers-n"></div>
+    <div class="input-row"><label>Hours per day</label><input type="range" min="1" max="24" value="8" step="0.5" id="a-hpd-r"><input type="number" min="1" max="24" value="8" step="0.5" id="a-hpd-n"></div>
+    <div class="input-row"><label>Days per week</label><input type="range" min="1" max="7" value="5" step="1" id="a-dpw-r"><input type="number" min="1" max="7" value="5" step="1" id="a-dpw-n"></div>
+    <div class="input-row"><label>Tech multiplier</label><input type="range" min="1" max="20" value="2" step="0.1" id="a-mult-r"><input type="number" min="1" max="20" value="2" step="0.1" id="a-mult-n"></div>
+    <div class="input-row"><label>Capital lifespan (yrs)</label><input type="range" min="1" max="20" value="5" step="1" id="a-life-r"><input type="number" min="1" max="20" value="5" step="1" id="a-life-n"></div>
+    <div class="labor-warning" id="a-warn"></div>
+  </div>
+  <div>
+    <div class="section-label">Firm B</div>
+    <div class="input-row"><label>Workers</label><input type="range" min="1" max="500" value="40" step="1" id="b-workers-r"><input type="number" min="1" max="500" value="40" step="1" id="b-workers-n"></div>
+    <div class="input-row"><label>Hours per day</label><input type="range" min="1" max="24" value="10" step="0.5" id="b-hpd-r"><input type="number" min="1" max="24" value="10" step="0.5" id="b-hpd-n"></div>
+    <div class="input-row"><label>Days per week</label><input type="range" min="1" max="7" value="6" step="1" id="b-dpw-r"><input type="number" min="1" max="7" value="6" step="1" id="b-dpw-n"></div>
+    <div class="input-row"><label>Tech multiplier</label><input type="range" min="1" max="20" value="7" step="0.1" id="b-mult-r"><input type="number" min="1" max="20" value="7" step="0.1" id="b-mult-n"></div>
+    <div class="input-row"><label>Capital lifespan (yrs)</label><input type="range" min="1" max="20" value="10" step="1" id="b-life-r"><input type="number" min="1" max="20" value="10" step="1" id="b-life-n"></div>
+    <div class="labor-warning" id="b-warn"></div>
+  </div>
+</div>
+
+<hr class="divider">
+<div class="firm-grid" id="output-cards"></div>
+<div class="equilibrium" id="eq-block"></div>
+
+<div class="export-bar">
+  <button class="export-btn" id="export-btn">&#8659; Export to Excel</button>
+</div>
+
+<footer>
+  <div style="margin-bottom: 10px;">Built by <a href="https://github.com/sswamy2000" style="color: var(--text-secondary); text-decoration: underline;">Steven Swamy</a> — <a href="https://sswamy2000.github.io/marx-simulator/marx-simulator-docs.pdf" style="color: var(--text-secondary); text-decoration: underline;">Technical Documentation (PDF)</a> — &copy; 2025 Steven Swamy, MIT License</div>
+  Built from Marx, Capital Vol. I (Ch. 10, 15) and Vol. III (Ch. 13–15).<br>
+  Output = workers × hours/day × days/week × 52 × tech multiplier. Each labor-hour produces 1 widget at multiplier = 1.<br>
+  Market share = firm output / total combined output (profitable firms only). Units sold = min(output, market size × share).<br>
+  C = mult × v × lifespan. Annual cost = (C/lifespan) + v. Rate of profit = s / (C + v) — Vol. III stock-based formulation.<br>
+  Firms are price takers. Cost/unit > market price = market exit. Unsold widgets: cost incurred, no revenue.
+</footer>
+
+<script>
+  const WEEKS = 52;
+
+  function laborWarn(hpd, dpw) {
+    const wh = hpd * dpw;
+    if (hpd > 12 || wh > 60) return { level: 'severe',   text: 'severe overwork — chronic disease, shortened life expectancy' };
+    if (hpd > 10 || wh > 50) return { level: 'elevated', text: 'elevated strain — elevated injury and burnout risk' };
+    return null;
+  }
+
+  function compute(workers, hpd, dpw, mult, lifespan) {
+    const workDaysPerYear        = dpw * WEEKS;
+    const annualHPW              = hpd * dpw * WEEKS;
+    const v                      = workers * annualHPW;           // variable capital (labor-hour index)
+
+    // Output grounded directly in all four production inputs:
+    // each labor-hour produces mult widgets; total = workers × annual hours × mult
+    const output                 = workers * annualHPW * mult;    // annual widget output
+
+    // Capital stock derived from labor base, tech, and lifespan
+    const C                      = mult * v * lifespan;           // total capital stock
+    const annualDepreciation     = C / lifespan;                  // = mult × v
+    const annualCost             = annualDepreciation + v;        // = (mult + 1) × v
+    const costPerUnit            = annualCost / output;           // = (mult+1)/(mult) = 1 + 1/mult
+
+    const orgComp                = C / v;                         // = mult × lifespan
+    const laborShare             = v / annualCost;
+
+    // Per-worker / per-day productivity
+    const widgetsPerWorkerPerDay = (annualHPW * mult) / workDaysPerYear;  // = hpd × mult
+    const widgetsPerDay          = widgetsPerWorkerPerDay * workers;
+    const widgetsPerWeek         = widgetsPerDay * dpw;
+
+    return { v, C, annualDepreciation, annualCost, output, costPerUnit, orgComp, laborShare, annualHPW, workDaysPerYear, widgetsPerWorkerPerDay, widgetsPerDay, widgetsPerWeek, lifespan, mult };
+  }
+
+  function allocate(a, b, aExited, bExited, marketSize) {
+    // Exited firms produce nothing
+    const aOut = aExited ? 0 : a.output;
+    const bOut = bExited ? 0 : b.output;
+    const total = aOut + bOut;
+
+    if (total === 0) return { aUnits: 0, bUnits: 0, aShare: 0, bShare: 0, totalOutput: 0 };
+
+    // Market share proportional to actual output
+    const aShare = aOut / total;
+    const bShare = bOut / total;
+
+    // Units sold = min(own output, proportional share of market size)
+    // If total supply <= market size, each firm sells all it produces
+    // If total supply > market size, each firm sells its proportional share of market size
+    const aUnits = Math.min(aOut, marketSize * aShare);
+    const bUnits = Math.min(bOut, marketSize * bShare);
+
+    return { aUnits, bUnits, aShare, bShare, totalOutput: total };
+  }
+
+  function financials(d, unitsSold, mktPrice) {
+    // Cost is incurred on full output, not just what's sold
+    const totalAnnualCost  = d.annualCost;                         // full annual cost regardless of sales
+    const revenue          = mktPrice * unitsSold;
+    const totalCost        = d.costPerUnit * d.output;             // cost of all widgets produced
+    const unsoldUnits      = Math.max(0, d.output - unitsSold);
+    const unsoldCost       = d.costPerUnit * unsoldUnits;          // cost incurred with no revenue return
+
+    // Profit = revenue - total annual cost (including unsold)
+    const profit           = revenue - totalAnnualCost;
+    const surplusValue     = profit;
+    const margin           = revenue > 0 ? profit / revenue : (profit >= 0 ? 1 : -Infinity);
+    const rateOfProfit     = (d.C + d.v) > 0 ? surplusValue / (d.C + d.v) : 0;
+    const profitPerWidget  = unitsSold > 0 ? profit / unitsSold : 0;
+    const marginPerWidget  = mktPrice > 0 ? (mktPrice - d.costPerUnit) / mktPrice : 0;
+    const utilization      = d.output > 0 ? unitsSold / d.output : 0;
+
+    return { revenue, totalAnnualCost, totalCost, unsoldUnits, unsoldCost, profit, surplusValue, margin, rateOfProfit, profitPerWidget, marginPerWidget, unitsSold, utilization };
+  }
+
+  function fmtI(n) {
+    const abs = Math.abs(n), sign = n < 0 ? '−' : '';
+    if (abs >= 1e9) return sign + (abs / 1e9).toFixed(2) + 'B';
+    if (abs >= 1e6) return sign + (abs / 1e6).toFixed(2) + 'M';
+    if (abs >= 1e3) return sign + (abs / 1e3).toFixed(1) + 'k';
+    return sign + abs.toFixed(1);
+  }
+  function pct(n)  { return (n * 100).toFixed(1) + '%'; }
+  function d3(n)   { return n.toFixed(3); }
+  function d1(n)   { return n.toFixed(1); }
+
+  function linkPair(id) {
+    const s = document.getElementById(id + '-r');
+    const n = document.getElementById(id + '-n');
+    s.addEventListener('input', () => { n.value = s.value; render(); });
+    n.addEventListener('input', () => {
+      let v = parseFloat(n.value);
+      if (isNaN(v)) return;
+      v = Math.min(Math.max(v, parseFloat(s.min)), parseFloat(s.max));
+      s.value = v; render();
+    });
+    n.addEventListener('blur', () => {
+      let v = parseFloat(n.value);
+      if (isNaN(v)) { n.value = s.value; return; }
+      v = Math.min(Math.max(v, parseFloat(s.min)), parseFloat(s.max));
+      n.value = v; s.value = v; render();
+    });
+  }
+
+  ['a-workers','a-hpd','a-dpw','a-mult','a-life',
+   'b-workers','b-hpd','b-dpw','b-mult','b-life',
+   'mkt','mktsize'].forEach(linkPair);
+
+  function g(id) { return parseFloat(document.getElementById(id + '-n').value); }
+
+  function stressClass(hpd, dpw) {
+    const wh = hpd * dpw;
+    if (hpd > 12 || wh > 60) return 'bad';
+    if (hpd > 10 || wh > 50) return 'warn';
+    return '';
+  }
+
+  function render() {
+    const mktPrice = g('mkt'), mktSize = g('mktsize');
+    const aW=g('a-workers'), aH=g('a-hpd'), aD=g('a-dpw'), aM=g('a-mult'), aL=g('a-life');
+    const bW=g('b-workers'), bH=g('b-hpd'), bD=g('b-dpw'), bM=g('b-mult'), bL=g('b-life');
+
+    const a = compute(aW, aH, aD, aM, aL);
+    const b = compute(bW, bH, bD, bM, bL);
+
+    const aExited = a.costPerUnit > mktPrice;
+    const bExited = b.costPerUnit > mktPrice;
+
+    const { aUnits, bUnits, aShare, bShare, totalOutput } = allocate(a, b, aExited, bExited, mktSize);
+
+    const aF = financials(a, aUnits, mktPrice);
+    const bF = financials(b, bUnits, mktPrice);
+
+    // Determine competitive status
+    const supplyExceedsDemand = totalOutput > mktSize;
+    const aLeads = !aExited && !bExited && aShare > bShare;
+    const bLeads = !aExited && !bExited && bShare > aShare;
+    const tied   = !aExited && !bExited && Math.abs(aShare - bShare) < 0.001;
+
+    // Labor warnings
+    ['a','b'].forEach(firm => {
+      const warn = document.getElementById(firm + '-warn');
+      const res  = laborWarn(g(firm+'-hpd'), g(firm+'-dpw'));
+      if (res) { warn.textContent = '⚠ ' + res.text; warn.className = 'labor-warning show ' + res.level; }
+      else { warn.className = 'labor-warning'; }
+    });
+
+    function card(label, d, f, exited, leads, mktShareFrac, workers, hpd, dpw, mult) {
+      const badge = exited  ? '<span class="badge badge-exit">market exit</span>'
+                  : leads   ? '<span class="badge badge-win">output advantage</span>'
+                  : tied    ? '<span class="badge badge-tied">tied</span>'
+                            : '<span class="badge badge-lose">smaller output share</span>';
+
+      const exitBanner = exited
+        ? `<div class="exit-banner">Cost/widget (${d3(d.costPerUnit)}) exceeds market price (${d3(mktPrice)}) — cannot cover costs. Firm exits production.</div>`
+        : '';
+
+      const supplyBanner = !exited && supplyExceedsDemand
+        ? `<div class="info-banner">Total supply (${fmtI(totalOutput)}) exceeds market size (${fmtI(mktSize)}). This firm sells ${pct(f.utilization)} of what it produces. Unsold cost: ${fmtI(f.unsoldCost)} index units.</div>`
+        : '';
+
+      const sc = stressClass(hpd, dpw);
+      const wh = (hpd * dpw).toFixed(1);
+      const pClass  = f.profit >= 0 ? 'good' : 'bad';
+      const mClass  = f.margin >= 0.15 ? 'good' : f.margin >= 0 ? 'warn' : 'bad';
+      const rClass  = f.rateOfProfit >= 0.10 ? 'good' : f.rateOfProfit >= 0 ? 'warn' : 'bad';
+      const uClass  = f.utilization >= 0.9 ? 'good' : f.utilization >= 0.5 ? 'warn' : 'bad';
+
+      return `<div class="firm-card ${exited ? 'exited' : leads ? 'winner' : tied ? 'tied' : ''}">
+        <div class="firm-title">${label}${badge}</div>
+        ${exitBanner}${supplyBanner}
+
+        <div class="metric-section-head">labor</div>
+        <div class="metric-row"><span class="metric-label">workers</span><span class="metric-val">${workers}</span></div>
+        <div class="metric-row"><span class="metric-label">hours / day</span><span class="metric-val ${sc}">${hpd}</span></div>
+        <div class="metric-row"><span class="metric-label">days / week</span><span class="metric-val ${sc}">${dpw}</span></div>
+        <div class="metric-row"><span class="metric-label">weekly hrs / worker</span><span class="metric-val ${sc}">${wh}</span></div>
+        <div class="metric-row"><span class="metric-label">annual hrs / worker</span><span class="metric-val">${Math.round(d.annualHPW).toLocaleString()}</span></div>
+        <div class="metric-row"><span class="metric-label">widgets / worker / day</span><span class="metric-val">${d1(d.widgetsPerWorkerPerDay)}</span></div>
+        <div class="metric-row"><span class="metric-label">widgets / day (firm)</span><span class="metric-val">${fmtI(d.widgetsPerDay)}</span></div>
+        <div class="metric-row"><span class="metric-label">widgets / week (firm)</span><span class="metric-val">${fmtI(d.widgetsPerWeek)}</span></div>
+
+        <div class="metric-section-head">capital composition</div>
+        <div class="metric-row"><span class="metric-label">v — variable capital (labor)</span><span class="metric-val">${fmtI(d.v)}</span></div>
+        <div class="metric-row"><span class="metric-label">C — total capital stock</span><span class="metric-val">${fmtI(d.C)}</span></div>
+        <div class="metric-row"><span class="metric-label">capital lifespan</span><span class="metric-val">${d.lifespan} yrs</span></div>
+        <div class="metric-row"><span class="metric-label">annual depreciation</span><span class="metric-val">${fmtI(d.annualDepreciation)}</span></div>
+        <div class="metric-row"><span class="metric-label">annual cost (depr + v)</span><span class="metric-val">${fmtI(d.annualCost)}</span></div>
+        <div class="metric-row"><span class="metric-label">tech multiplier</span><span class="metric-val">${d1(mult)}x</span></div>
+        <div class="metric-row"><span class="metric-label">organic composition (C/v)</span><span class="metric-val">${d.orgComp.toFixed(2)}</span></div>
+        <div class="metric-row"><span class="metric-label">labor share of annual cost</span><span class="metric-val">${pct(d.laborShare)}</span></div>
+
+        <div class="metric-section-head">production &amp; market</div>
+        <div class="metric-row"><span class="metric-label">annual output (widgets)</span><span class="metric-val">${fmtI(d.output)}</span></div>
+        <div class="metric-row"><span class="metric-label">output share of supply</span><span class="metric-val purple">${pct(mktShareFrac)}</span></div>
+        <div class="metric-row"><span class="metric-label">market size (widgets / yr)</span><span class="metric-val purple">${fmtI(mktSize)}</span></div>
+        <div class="metric-row"><span class="metric-label">units sold</span><span class="metric-val purple">${fmtI(f.unitsSold)}</span></div>
+        <div class="metric-row"><span class="metric-label">utilization rate</span><span class="metric-val ${uClass}">${pct(f.utilization)}</span></div>
+        <div class="metric-row"><span class="metric-label">unsold widgets</span><span class="metric-val ${f.unsoldUnits > 0 ? 'warn' : ''}">${fmtI(f.unsoldUnits)}</span></div>
+        <div class="metric-row"><span class="metric-label">cost index / widget</span><span class="metric-val ${exited ? 'bad' : ''}">${d3(d.costPerUnit)}</span></div>
+        <div class="metric-row"><span class="metric-label">market price / widget</span><span class="metric-val neutral">${d3(mktPrice)}</span></div>
+
+        <div class="metric-section-head">per widget</div>
+        <div class="metric-row"><span class="metric-label">revenue / widget</span><span class="metric-val neutral">${d3(mktPrice)}</span></div>
+        <div class="metric-row"><span class="metric-label">profit / widget (sold)</span><span class="metric-val ${pClass}">${d3(f.profitPerWidget)}</span></div>
+        <div class="metric-row"><span class="metric-label">margin / widget</span><span class="metric-val ${f.marginPerWidget >= 0 ? 'good' : 'bad'}">${pct(f.marginPerWidget)}</span></div>
+
+        <div class="metric-section-head">annual</div>
+        <div class="metric-row"><span class="metric-label">revenue (index)</span><span class="metric-val neutral">${fmtI(f.revenue)}</span></div>
+        <div class="metric-row"><span class="metric-label">total annual cost (index)</span><span class="metric-val">${fmtI(f.totalAnnualCost)}</span></div>
+        <div class="metric-row"><span class="metric-label">unsold widget cost</span><span class="metric-val ${f.unsoldUnits > 0 ? 'warn' : ''}">${fmtI(f.unsoldCost)}</span></div>
+        <div class="metric-row"><span class="metric-label">surplus value (s)</span><span class="metric-val ${pClass}">${fmtI(f.surplusValue)}</span></div>
+        <div class="metric-row"><span class="metric-label">profit (index)</span><span class="metric-val ${pClass}">${fmtI(f.profit)}</span></div>
+        <div class="metric-row"><span class="metric-label">profit margin</span><span class="metric-val ${mClass}">${pct(f.margin)}</span></div>
+        <div class="metric-row"><span class="metric-label">rate of profit s/(C+v)</span><span class="metric-val ${rClass}">${pct(f.rateOfProfit)}</span></div>
+      </div>`;
+    }
+
+    document.getElementById('output-cards').innerHTML =
+      card('Firm A', a, aF, aExited, aLeads, aExited ? 0 : aShare, aW, aH, aD, aM) +
+      card('Firm B', b, bF, bExited, bLeads, bExited ? 0 : bShare, bW, bH, bD, bM);
+
+    // Narrative
+    let narrative = '';
+    if (aExited && bExited) {
+      narrative = `Both firms are unprofitable at the current market price. Combined output would be ${fmtI(a.output + b.output)} widgets but neither can cover production costs. This is a crisis of valorization — the market price has been driven below the cost floor of even the most efficient producer. Capital exits the sector.`;
+    } else if (aExited) {
+      const util = pct(bF.utilization);
+      narrative = `Firm A cannot cover costs at this market price and exits production. Firm B produces ${fmtI(b.output)} widgets annually and ${supplyExceedsDemand ? `sells ${util} of its output — supply exceeds demand, so ${fmtI(bF.unsoldUnits)} widgets go unsold, their production cost incurred with no revenue return` : `sells all of its output into the market`}.`;
+    } else if (bExited) {
+      const util = pct(aF.utilization);
+      narrative = `Firm B cannot cover costs at this market price and exits production. Firm A produces ${fmtI(a.output)} widgets annually and ${supplyExceedsDemand ? `sells ${util} of its output — supply exceeds demand, so ${fmtI(aF.unsoldUnits)} widgets go unsold` : `sells all of its output into the market`}.`;
+    } else {
+      const leader = aLeads ? 'Firm A' : bLeads ? 'Firm B' : null;
+      const leaderShare = aLeads ? pct(aShare) : pct(bShare);
+      const supplyNote = supplyExceedsDemand
+        ? `Combined output (${fmtI(totalOutput)}) exceeds market size (${fmtI(mktSize)}). Both firms sell proportionally less than they produce — utilization rates reflect the gap between productive capacity and market absorption.`
+        : `Combined output (${fmtI(totalOutput)}) is within market size (${fmtI(mktSize)}). Both firms sell everything they produce.`;
+      narrative = `${leader ? leader + ' holds ' + leaderShare + ' of total supply based on its production volume.' : 'Both firms hold equal output shares.'} ${supplyNote}
+      Market share here is earned through actual production, not assumed from cost advantage alone. A firm can gain share by adding workers, extending hours, or raising the tech multiplier — but only the tech multiplier improves cost/unit. Adding workers or hours to chase market share increases revenue but also increases total cost proportionally, leaving margins unchanged. The tech multiplier is the only input that simultaneously expands output and reduces cost per widget.`;
+    }
+
+    document.getElementById('eq-block').innerHTML = `
+      <div class="eq-formula">
+        output = workers × hours/day × days/week × 52 × tech multiplier<br>
+        market share = firm output / total supply &nbsp;|&nbsp; units sold = min(output, market size × share)<br>
+        cost/unit = (C/lifespan + v) / output &nbsp;|&nbsp; profit = revenue − total annual cost &nbsp;|&nbsp; rate of profit = s / (C + v)
+      </div>${narrative}`;
+  }
+
+  render();
+
+  // ── EXPORT ────────────────────────────────────────────────────────
+  document.getElementById('export-btn').addEventListener('click', exportXLSX);
+
+  function exportXLSX() {
+    const mktPrice = g('mkt'), mktSize = g('mktsize');
+    const aW=g('a-workers'), aH=g('a-hpd'), aD=g('a-dpw'), aM=g('a-mult'), aL=g('a-life');
+    const bW=g('b-workers'), bH=g('b-hpd'), bD=g('b-dpw'), bM=g('b-mult'), bL=g('b-life');
+
+    const a = compute(aW, aH, aD, aM, aL);
+    const b = compute(bW, bH, bD, bM, bL);
+    const aExited = a.costPerUnit > mktPrice;
+    const bExited = b.costPerUnit > mktPrice;
+    const { aUnits, bUnits, aShare, bShare, totalOutput } = allocate(a, b, aExited, bExited, mktSize);
+    const aF = financials(a, aUnits, mktPrice);
+    const bF = financials(b, bUnits, mktPrice);
+
+    function r(n, decimals = 2) { return isFinite(n) ? parseFloat(n.toFixed(decimals)) : 0; }
+
+    // Build rows: [ label, Firm A value, Firm B value ]
+    const rows = [
+      // Header
+      ['Marxian Competitive Dynamics Simulator — Export', '', ''],
+      ['Generated', new Date().toLocaleString(), ''],
+      ['', '', ''],
+
+      // Column headers
+      ['', 'FIRM A', 'FIRM B'],
+      ['', '', ''],
+
+      // ── INPUTS ──
+      ['INPUTS', '', ''],
+      ['Workers', aW, bW],
+      ['Hours per day', aH, bH],
+      ['Days per week', aD, bD],
+      ['Tech multiplier', aM, bM],
+      ['Capital lifespan (yrs)', aL, bL],
+      ['', '', ''],
+      ['MARKET INPUTS', '', ''],
+      ['Market price / widget', mktPrice, mktPrice],
+      ['Market size (widgets / yr)', mktSize, mktSize],
+      ['', '', ''],
+
+      // ── LABOR ──
+      ['LABOR', '', ''],
+      ['Weekly hrs / worker', r(aH * aD, 1), r(bH * bD, 1)],
+      ['Annual hrs / worker', r(a.annualHPW, 0), r(b.annualHPW, 0)],
+      ['Widgets / worker / day', r(a.widgetsPerWorkerPerDay, 1), r(b.widgetsPerWorkerPerDay, 1)],
+      ['Widgets / day (firm)', r(a.widgetsPerDay, 0), r(b.widgetsPerDay, 0)],
+      ['Widgets / week (firm)', r(a.widgetsPerWeek, 0), r(b.widgetsPerWeek, 0)],
+      ['', '', ''],
+
+      // ── CAPITAL COMPOSITION ──
+      ['CAPITAL COMPOSITION', '', ''],
+      ['v — variable capital (labor index)', r(a.v, 0), r(b.v, 0)],
+      ['C — total capital stock', r(a.C, 0), r(b.C, 0)],
+      ['Annual depreciation', r(a.annualDepreciation, 0), r(b.annualDepreciation, 0)],
+      ['Annual cost (depreciation + v)', r(a.annualCost, 0), r(b.annualCost, 0)],
+      ['Tech multiplier', r(aM, 1), r(bM, 1)],
+      ['Organic composition (C/v)', r(a.orgComp, 2), r(b.orgComp, 2)],
+      ['Labor share of annual cost', r(a.laborShare, 4), r(b.laborShare, 4)],
+      ['', '', ''],
+
+      // ── PRODUCTION & MARKET ──
+      ['PRODUCTION & MARKET', '', ''],
+      ['Annual output (widgets)', r(a.output, 0), r(b.output, 0)],
+      ['Output share of supply', r(aExited ? 0 : aShare, 4), r(bExited ? 0 : bShare, 4)],
+      ['Market size (widgets / yr)', mktSize, mktSize],
+      ['Units sold', r(aF.unitsSold, 0), r(bF.unitsSold, 0)],
+      ['Utilization rate', r(aF.utilization, 4), r(bF.utilization, 4)],
+      ['Unsold widgets', r(aF.unsoldUnits, 0), r(bF.unsoldUnits, 0)],
+      ['Cost index / widget', r(a.costPerUnit, 4), r(b.costPerUnit, 4)],
+      ['Market price / widget', r(mktPrice, 4), r(mktPrice, 4)],
+      ['Market status', aExited ? 'EXITED' : 'Active', bExited ? 'EXITED' : 'Active'],
+      ['', '', ''],
+
+      // ── PER WIDGET ──
+      ['PER WIDGET', '', ''],
+      ['Revenue / widget', r(mktPrice, 4), r(mktPrice, 4)],
+      ['Profit / widget (sold)', r(aF.profitPerWidget, 4), r(bF.profitPerWidget, 4)],
+      ['Margin / widget', r(aF.marginPerWidget, 4), r(bF.marginPerWidget, 4)],
+      ['', '', ''],
+
+      // ── ANNUAL ──
+      ['ANNUAL', '', ''],
+      ['Revenue (index)', r(aF.revenue, 2), r(bF.revenue, 2)],
+      ['Total annual cost (index)', r(aF.totalAnnualCost, 2), r(bF.totalAnnualCost, 2)],
+      ['Unsold widget cost (index)', r(aF.unsoldCost, 2), r(bF.unsoldCost, 2)],
+      ['Surplus value s (index)', r(aF.surplusValue, 2), r(bF.surplusValue, 2)],
+      ['Profit (index)', r(aF.profit, 2), r(bF.profit, 2)],
+      ['Profit margin', r(aF.margin, 4), r(bF.margin, 4)],
+      ['Rate of profit s/(C+v)', r(aF.rateOfProfit, 4), r(bF.rateOfProfit, 4)],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+
+    // Column widths
+    ws['!cols'] = [{ wch: 38 }, { wch: 20 }, { wch: 20 }];
+
+    // Style helpers — track cells to format
+    const pctRows  = [43,44, 52,53, 60,61, 65,66]; // 1-indexed rows that are percentages
+    const numFmt0  = '###,###,##0';
+    const numFmtD4 = '###,###,##0.0000';
+    const pctFmt   = '0.00%';
+
+    // Apply number formats
+    rows.forEach((row, ri) => {
+      const label = row[0];
+      ['B','C'].forEach(col => {
+        const cellRef = col + (ri + 1);
+        const cell = ws[cellRef];
+        if (!cell || cell.t !== 'n') return;
+        if (label.includes('share') || label.includes('margin') || label.includes('Margin') ||
+            label.includes('rate') || label.includes('Rate') || label.includes('utilization') ||
+            label.includes('Utilization') || label.includes('Labor share')) {
+          cell.z = pctFmt;
+        } else if (label.includes('/ widget') || label.includes('cost index') ||
+                   label.includes('Cost index') || label.includes('price') || label.includes('multiplier')) {
+          cell.z = numFmtD4;
+        } else if (typeof cell.v === 'number' && Math.abs(cell.v) >= 1) {
+          cell.z = numFmt0;
+        }
+      });
+    });
+
+    // Bold section headers and title
+    const boldRows = [1, 4, 6, 13, 16, 21, 28, 37, 47, 51, 55];
+    boldRows.forEach(ri => {
+      const cell = ws['A' + ri];
+      if (cell) { if (!cell.s) cell.s = {}; cell.s.font = { bold: true }; }
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Simulation Output');
+
+    const date = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb, `marx-simulator-${date}.xlsx`);
+  }
+
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</body>
+</html>
